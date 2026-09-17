@@ -1,0 +1,169 @@
+rules_version = '2';
+
+// =============================================================================
+// Independence Sales Sprint - reglas de seguridad de Cloud Firestore
+// =============================================================================
+//
+// ESTE ARCHIVO ES LO QUE DE VERDAD PROTEGE LOS DATOS.
+// La revision que hace el navegador solo decide que pintar en pantalla; si
+// alguien se salta el navegador, lo unico que lo detiene es este archivo.
+//
+// OJO: tener este archivo en el repositorio NO lo activa. Hay que desplegarlo:
+//     firebase deploy --only firestore:rules
+//
+// Resumen:
+//   - Sin sesion de Google: cero lectura. Ni el tablero, ni nombres, ni fotos.
+//   - Cualquier correo de la lista blanca (members/) lee TODO, fees incluidos.
+//     Eso es a proposito: el equipo acordo que los broker fees son visibles
+//     para todos los que tienen acceso.
+//   - Solo los dos correos de admin escriben.
+//   - members/ no se escribe desde el navegador: se siembra con
+//     scripts/seed-members.js usando el Admin SDK, que no pasa por estas reglas.
+//
+// REGLA DURA DE PRIVACIDAD: las entradas tienen una lista cerrada de campos.
+// Cualquier intento de escribir un campo extra (nombre de cliente, telefono,
+// direccion, dimensiones, link a una captura) es rechazado por el servidor.
+// =============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------------------------------------------------------------------
+    // Identidad
+    // ---------------------------------------------------------------------
+
+    function signedIn() {
+      return request.auth != null
+        && request.auth.token.email != null
+        && request.auth.token.email_verified == true;
+    }
+
+    function email() {
+      return request.auth.token.email.lower();
+    }
+
+    // Esta en la lista blanca.
+    function isMember() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/members/$(email()));
+    }
+
+    // Los dos correos de admin van escritos aqui a proposito: asi el permiso de
+    // escritura no depende de ningun documento que se pueda alterar.
+    // Esta lista debe coincidir con ADMIN_EMAILS en src/config/competition.ts
+    // y con data/members.json.
+    function isAdmin() {
+      return isMember() && email() in [
+        'operations@totaltransportlogistics.us',
+        'erwin@totaltransportlogistics.us'
+      ];
+    }
+
+    // ---------------------------------------------------------------------
+    // members/{email} - la lista blanca
+    // ---------------------------------------------------------------------
+    // Cada quien lee su propio documento (asi el sitio sabe su rol).
+    // Nadie escribe desde el navegador, ni los admins.
+
+    match /members/{memberEmail} {
+      allow read: if signedIn() && memberEmail == email();
+      allow write: if false;
+    }
+
+    // ---------------------------------------------------------------------
+    // brokers/{id} - el roster
+    // ---------------------------------------------------------------------
+    // Lectura para toda la lista blanca. Se siembra con el script.
+
+    match /brokers/{brokerId} {
+      allow read: if isMember();
+      allow write: if false;
+    }
+
+    // ---------------------------------------------------------------------
+    // entries/{id} - los eventos que puntean
+    // ---------------------------------------------------------------------
+
+    match /entries/{entryId} {
+
+      // Lista cerrada de campos. No existe ni puede existir un campo de cliente.
+      function allowedFields() {
+        return [
+          'brokerId', 'date', 'kind', 'points', 'quoteSent', 'brokerFee',
+          'feeCollected', 'status', 'note',
+          'createdBy', 'createdAt', 'updatedBy', 'updatedAt'
+        ];
+      }
+
+      function validShape(data) {
+        return data.keys().hasOnly(allowedFields())
+          && data.keys().hasAll([
+               'brokerId', 'date', 'kind', 'points', 'quoteSent',
+               'brokerFee', 'feeCollected', 'status', 'note'
+             ])
+          && data.brokerId is string && data.brokerId.size() > 0 && data.brokerId.size() <= 60
+          // 'YYYY-MM-DD' en hora de Guatemala
+          && data.date is string && data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+          && data.kind in [
+               'opportunity', 'extra_quote', 'first_close',
+               'reactivated_or_referral', 'cold_call_quote', 'cold_call_close',
+               'big_fish', 'adjustment'
+             ]
+          && data.points is number && data.points >= -100 && data.points <= 100
+          && data.quoteSent is bool
+          && data.brokerFee is number && data.brokerFee >= 0 && data.brokerFee <= 1000000
+          && data.feeCollected is bool
+          && data.status in ['pending', 'approved', 'rejected']
+          // La nota es corta a proposito: es un recordatorio del admin, no un
+          // lugar para pegar datos del cliente.
+          && data.note is string && data.note.size() <= 280;
+      }
+
+      allow read: if isMember();
+
+      allow create: if isAdmin()
+        && validShape(request.resource.data)
+        && request.resource.data.createdBy == email()
+        && request.resource.data.updatedBy == email();
+
+      allow update: if isAdmin()
+        && validShape(request.resource.data)
+        && request.resource.data.updatedBy == email()
+        // Quien creo la entrada no se reescribe.
+        && request.resource.data.createdBy == resource.data.createdBy;
+
+      allow delete: if isAdmin();
+    }
+
+    // ---------------------------------------------------------------------
+    // comments/{id} - notas del admin sobre un broker
+    // ---------------------------------------------------------------------
+
+    match /comments/{commentId} {
+
+      function validComment(data) {
+        return data.keys().hasOnly([
+            'brokerId', 'text', 'authorEmail', 'authorName', 'createdAt'
+          ])
+          && data.keys().hasAll(['brokerId', 'text', 'authorEmail', 'authorName'])
+          && data.brokerId is string && data.brokerId.size() > 0 && data.brokerId.size() <= 60
+          && data.text is string && data.text.size() > 0 && data.text.size() <= 1000
+          && data.authorEmail == email()
+          && data.authorName is string && data.authorName.size() <= 120;
+      }
+
+      allow read: if isMember();
+      allow create: if isAdmin() && validComment(request.resource.data);
+      allow update: if isAdmin() && validComment(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // ---------------------------------------------------------------------
+    // Todo lo demas queda cerrado.
+    // ---------------------------------------------------------------------
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "_comment": [
+    "Lista blanca de acceso y roster de brokers del Independence Sales Sprint.",
+    "Este archivo es la fuente de verdad de quien entra al sitio.",
+    "Se carga a Firestore con: node scripts/seed-members.js --dry-run",
+    "El dominio de todos los correos es totaltransportlogistics.us.",
+    "NO agregar aqui ningun dato de cliente."
+  ],
+  "domain": "totaltransportlogistics.us",
+  "joinedAt": "2026-09-16",
+  "admins": [
+    { "local": "operations", "name": "Nery Molina" },
+    { "local": "erwin", "name": "Erwin Solorzano" }
+  ],
+  "staffViewers": [
+    { "local": "accounting", "name": "Accounting" },
+    { "local": "hhrr", "name": "Recursos Humanos" },
+    { "local": "isabel", "name": "Isabel" }
+  ],
+  "brokers": [
+    { "local": "alexis", "id": "alexis-garcia", "name": "ALEXIS GARCIA" },
+    { "local": "selvin", "id": "selvin-flores", "name": "SELVIN FLORES" },
+    { "local": "andrew", "id": "andrew-galicia", "name": "ANDREW GALICIA" },
+    { "local": "bryan", "id": "bryan-guerra", "name": "BRYAN GUERRA" },
+    { "local": "james", "id": "james-pena", "name": "JAMES PENA" },
+    { "local": "javi", "id": "javi-duran", "name": "JAVI DURAN" },
+    { "local": "joe", "id": "joe-ayala", "name": "JOE AYALA" },
+    { "local": "jonathan", "id": "jonathan-suazo", "name": "JONATHAN SUAZO" },
+    { "local": "josh", "id": "josh-sarceno", "name": "JOSH SARCENO" },
+    { "local": "lis", "id": "lis-rodriguez", "name": "LIS RODRIGUEZ" },
+    { "local": "marv", "id": "marv-linares", "name": "MARV LINARES" },
+    { "local": "mary", "id": "mary-gaytan", "name": "MARY GAYTAN" },
+    { "local": "saul", "id": "saul-escobar", "name": "SAUL ESCOBAR" },
+    { "local": "viny", "id": "viny-catalan", "name": "VINY CATALAN" },
+    { "local": "yari", "id": "yari-gonzalez", "name": "YARI GONZALEZ" },
+    { "local": "edvin", "id": "edvin-paredes", "name": "EDVIN PAREDES" },
+    { "local": "gus", "id": "gus-mendez", "name": "GUS MENDEZ" },
+    { "local": "nery.m", "id": "nery-mendez", "name": "NERY MENDEZ" },
+    { "local": "oliver", "id": "oliver-centeno", "name": "OLIVER CENTENO" },
+    { "local": "gabe", "id": "gabe-mendez", "name": "GABE MENDEZ" },
+    { "local": "juan", "id": "juan-diaz", "name": "JUAN DIAZ" },
+    { "local": "charly", "id": "charly-molina", "name": "CHARLY MOLINA" },
+    { "local": "joseph", "id": "joseph-ruano", "name": "JOSEPH RUANO" },
+    { "local": "marvin", "id": "marvin-guarchaj", "name": "MARVIN GUARCHAJ" },
+    { "local": "kevin", "id": "kevin-romero", "name": "KEVIN ROMERO" }
+  ]
+}
