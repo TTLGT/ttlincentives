@@ -18,7 +18,7 @@ interface TooltipProps {
   /** Traduce la clave de la serie a un nombre legible. */
   nameOf?: (key: string) => string
   formatValue?: (value: number) => string
-  /** Oculta las series en cero, que en 25 brokers son casi todas. */
+  /** Oculta las series en cero, que con todo el roster son casi todas. */
   hideZeros?: boolean
   titleOf?: (label: string) => string
 }

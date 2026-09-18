@@ -14,7 +14,7 @@ interface Props {
 /**
  * Puntos por semana y por broker.
  *
- * Barras horizontales con el nombre completo a la izquierda: con 25 brokers es
+ * Barras horizontales con el nombre completo a la izquierda: con el roster entero es
  * la unica forma de que los nombres se lean sin girarlos. Cada semana es una
  * serie apilada.
  */

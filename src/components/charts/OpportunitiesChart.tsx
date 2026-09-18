@@ -21,8 +21,8 @@ const OTHERS_KEY = '__otros__'
 /**
  * Oportunidades validadas por dia.
  *
- * Con los 25 brokers apilados solo los ocho primeros llevan color propio; el
- * resto se suma en una sola banda gris "Otros". Veinticinco colores en una
+ * Con todos los brokers apilados solo los ocho primeros llevan color propio; el
+ * resto se suma en una sola banda gris "Otros". Dos docenas de colores en una
  * barra apilada no se distinguen ni de cerca, menos en la TV.
  */
 export function OpportunitiesChart({ entries, days, brokers, selected, dark }: Props) {

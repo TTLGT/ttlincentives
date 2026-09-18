@@ -39,7 +39,7 @@ client information we are not allowed to copy. The sprint starts fresh.
 
 ## Broker fees are visible to everyone signed in
 
-Every approved account — both admins, the staff viewers, and all 25 brokers —
+Every approved account — both admins, the staff viewers, and every broker —
 sees every broker's fee amounts and totals, on the leaderboard, in the charts and
 on every broker page. This is deliberate and the team agreed to it. There is no
 role check on fees and no toggle for it. Don't add one.
@@ -172,17 +172,26 @@ the Admin SDK, which bypasses the rules.
 ### Get a service account key
 
 **Project settings → Service accounts → Generate new private key.** Save the
-JSON **outside the repo** (e.g. `C:\keys\ttl-incentives.json`).
+JSON **outside the repo**, for example in `C:\keys\`.
+
+Firebase gives the file a long name like
+`ttl-incentives-firebase-adminsdk-fbsvc-8bc01913bb.json`. Either keep that name
+and point the variable at it exactly, or rename the file — but make sure the two
+match. **Pointing at a filename that doesn't exist is the easiest way to make
+the seed fail**, and the error it produces is not obvious.
 
 ```powershell
 # Windows PowerShell
-$env:GOOGLE_APPLICATION_CREDENTIALS = "C:\keys\ttl-incentives.json"
+$env:GOOGLE_APPLICATION_CREDENTIALS = "C:\keys\<exact-filename>.json"
 ```
 
 ```bash
 # bash
-export GOOGLE_APPLICATION_CREDENTIALS=/path/to/ttl-incentives.json
+export GOOGLE_APPLICATION_CREDENTIALS=/path/to/<exact-filename>.json
 ```
+
+The variable only lasts for that terminal window. Open a new one and you'll need
+to set it again before re-seeding.
 
 ### Run it
 
@@ -194,7 +203,8 @@ npm run seed -- --prune          # also deletes anyone no longer in the JSON
 ```
 
 `--dry-run` prints every document it would write and a summary
-(`2 admins, 28 viewers, 25 brokers`) before touching anything. Start there.
+(for example `2 admins, 27 viewers, 24 brokers`) before touching anything.
+Start there.
 
 ---
 

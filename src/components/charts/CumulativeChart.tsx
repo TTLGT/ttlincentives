@@ -17,7 +17,7 @@ interface Props {
 /**
  * Puntos acumulados por broker en el tiempo, una linea por broker.
  *
- * La leyenda es la lista completa de los 25: al hacer clic se aisla ese broker
+ * La leyenda es la lista completa de brokers: al hacer clic se aisla ese broker
  * y el resto se apaga. Los ocho primeros del tablero llevan color propio; los
  * demas van en gris hasta que se les aisla, y entonces toman el color de foco.
  *

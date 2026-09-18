@@ -18,8 +18,8 @@
  * nombres de brokers y roles.
  */
 
-import { existsSync, readFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { basename, dirname, extname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -35,8 +35,22 @@ const DATA_FILE = resolve(HERE, '..', 'data', 'members.json')
  */
 const PHOTOS_DIR = resolve(HERE, '..', 'photos-source')
 
-/** Limite propio, bien por debajo del maximo de 1 MB por documento. */
-const MAX_PHOTO_BYTES = 700 * 1024
+/**
+ * Las fotos se reducen a 400x400 antes de subirlas.
+ *
+ * Las que salen de Drive vienen de camara: 400 KB a 2 MB cada una. Un
+ * documento de Firestore no puede pasar de 1 MB, y guardar la imagen en
+ * base64 la infla como un 33%, asi que sin reducir casi ninguna entraria.
+ * Reducidas quedan en unos 20-40 KB.
+ */
+const PHOTO_SIZE = 400
+const PHOTO_QUALITY = 82
+
+/**
+ * Limite sobre la cadena base64 YA CODIFICADA, que es lo que de verdad ocupa
+ * el documento. No sobre el archivo original.
+ */
+const MAX_ENCODED_BYTES = 600 * 1024
 
 const PHOTO_TYPES = [
   ['.jpg', 'image/jpeg'],
@@ -45,22 +59,131 @@ const PHOTO_TYPES = [
   ['.webp', 'image/webp'],
 ]
 
-/** Busca la foto de un broker y la devuelve como data URI, o null si no hay. */
-function readPhoto(brokerId) {
-  for (const [ext, mime] of PHOTO_TYPES) {
-    const file = resolve(PHOTOS_DIR, brokerId + ext)
-    if (!existsSync(file)) continue
-    const bytes = readFileSync(file)
-    if (bytes.length > MAX_PHOTO_BYTES) {
-      return { error: `pesa ${(bytes.length / 1024).toFixed(0)} KB (maximo ${MAX_PHOTO_BYTES / 1024} KB)` }
+/**
+ * Normaliza un nombre de archivo para compararlo con el id del broker.
+ *
+ * Las fotos vienen de Drive con el nombre que sea: "ALEX FLORES.jpg",
+ * "Alex Flores.JPG", "alex_flores.jpeg". Todas esas caen en 'alex-flores',
+ * que es el id. Asi no hay que renombrar 25 archivos a mano.
+ *
+ * Misma logica que toBrokerId() en src/lib/format.ts.
+ */
+function normalizeKey(text) {
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+/** Indexa photos-source/ una sola vez: clave normalizada -> archivo. */
+function indexPhotos() {
+  const index = new Map()
+  if (!existsSync(PHOTOS_DIR)) return index
+
+  for (const file of readdirSync(PHOTOS_DIR)) {
+    const ext = extname(file).toLowerCase()
+    const type = PHOTO_TYPES.find(([e]) => e === ext)
+    if (!type) continue
+    const key = normalizeKey(basename(file, extname(file)))
+    if (!key) continue
+    // Si dos archivos normalizan igual, gana el primero y se avisa despues.
+    if (index.has(key)) {
+      index.get(key).duplicates.push(file)
+      continue
     }
-    return {
-      dataUri: `data:${mime};base64,${bytes.toString('base64')}`,
-      bytes: bytes.length,
-      name: brokerId + ext,
+    index.set(key, { file, mime: type[1], duplicates: [], used: false })
+  }
+  return index
+}
+
+const PHOTO_INDEX = indexPhotos()
+
+/** sharp es opcional: si falta, se sube la foto tal cual y se avisa. */
+let sharp = null
+try {
+  sharp = (await import('sharp')).default
+} catch {
+  console.warn(
+    '\nAviso: falta sharp, asi que las fotos NO se van a reducir.\n' +
+      'Instalalo con:  npm install -D sharp\n' +
+      'Sin el, cualquier foto de camara va a salir demasiado grande.\n',
+  )
+}
+
+/**
+ * Busca la foto de un broker, la reduce a 400x400 y la devuelve como data URI.
+ * Devuelve null si no hay archivo para ese broker.
+ */
+async function readPhoto(broker) {
+  // Por id ('alex-flores'), y si no, por su nombre ('ALEX FLORES').
+  const entry = PHOTO_INDEX.get(broker.id) ?? PHOTO_INDEX.get(normalizeKey(broker.name))
+  if (!entry) return null
+
+  entry.used = true
+  const original = readFileSync(resolve(PHOTOS_DIR, entry.file))
+
+  let bytes = original
+  let mime = entry.mime
+  if (sharp) {
+    try {
+      // 'attention' recorta hacia la parte con mas informacion visual, que en
+      // un retrato suele ser la cara, en vez de cortar siempre por el centro.
+      bytes = await sharp(original)
+        .rotate() // respeta la orientacion EXIF; si no, algunas salen acostadas
+        .resize(PHOTO_SIZE, PHOTO_SIZE, { fit: 'cover', position: 'attention' })
+        .jpeg({ quality: PHOTO_QUALITY })
+        .toBuffer()
+      mime = 'image/jpeg'
+    } catch (err) {
+      return { name: entry.file, error: `no se pudo procesar (${err.message})` }
     }
   }
-  return null
+
+  const base64 = bytes.toString('base64')
+  if (base64.length > MAX_ENCODED_BYTES) {
+    return {
+      name: entry.file,
+      error: `queda en ${(base64.length / 1024).toFixed(0)} KB codificada (maximo ${MAX_ENCODED_BYTES / 1024} KB)`,
+    }
+  }
+
+  return {
+    dataUri: `data:${mime};base64,${base64}`,
+    originalBytes: original.length,
+    bytes: bytes.length,
+    encodedBytes: base64.length,
+    name: entry.file,
+    duplicates: entry.duplicates,
+  }
+}
+
+/** Busca el id mas parecido, para sugerirlo cuando una foto no coincide. */
+function closestId(key, ids) {
+  const parts = key.split('-').filter(Boolean)
+  let best = null
+  let bestScore = 0
+  for (const id of ids) {
+    const idParts = id.split('-')
+    let score = 0
+    for (const part of parts) {
+      // Cuenta un apellido igual, o un nombre que empieza igual (Jose/Joseph).
+      if (idParts.some((p) => p === part || p.startsWith(part) || part.startsWith(p))) score++
+    }
+    if (score > bestScore) {
+      bestScore = score
+      best = id
+    }
+  }
+  return bestScore > 0 ? best : null
+}
+
+/** Archivos que quedaron sin dueno: casi siempre un nombre mal escrito. */
+function unmatchedPhotos() {
+  return [...PHOTO_INDEX.entries()]
+    .filter(([, entry]) => !entry.used)
+    .map(([key, entry]) => ({ key, file: entry.file }))
 }
 
 const args = new Set(process.argv.slice(2))
@@ -87,7 +210,7 @@ if (args.has('--help') || args.has('-h')) {
 
 /** @typedef {{ email: string, role: 'admin'|'viewer', brokerId: string|null }} MemberDoc */
 
-function buildPlan() {
+async function buildPlan() {
   const raw = JSON.parse(readFileSync(DATA_FILE, 'utf8'))
   const domain = raw.domain
   const joinedAt = raw.joinedAt
@@ -120,7 +243,7 @@ function buildPlan() {
 
     // photoData solo se incluye si de verdad hay archivo. Asi, correr el seed
     // sin la carpeta de fotos NO borra las que ya estan cargadas.
-    const photo = readPhoto(broker.id)
+    const photo = await readPhoto(broker)
     if (photo?.dataUri) doc.photoData = photo.dataUri
     doc._photo = photo
 
@@ -153,7 +276,7 @@ function printPlan({ members, brokers }) {
       note = `FOTO IGNORADA: ${b._photo.error}`
       oversized.push(b.id)
     } else if (b._photo?.dataUri) {
-      note = `foto ${b._photo.name} (${(b._photo.bytes / 1024).toFixed(0)} KB)`
+      note = `${b._photo.name}  ${(b._photo.originalBytes / 1024).toFixed(0)} KB -> ${(b._photo.encodedBytes / 1024).toFixed(0)} KB`
       withPhoto++
     }
     console.log(`  ${b.id.padEnd(20)} ${b.name.padEnd(20)} ${note}`)
@@ -170,6 +293,27 @@ function printPlan({ members, brokers }) {
   if (oversized.length > 0) {
     console.log(`\nOJO: estas fotos pesan de mas y NO se van a subir: ${oversized.join(', ')}`)
     console.log('Reducilas a 400x400 y volve a correr.')
+  }
+
+  // Lo mas facil de no notar: una foto que no le toca a nadie. Sin este aviso
+  // el broker sale con iniciales y parece que el script simplemente fallo.
+  const orphans = unmatchedPhotos()
+  if (orphans.length > 0) {
+    console.log(`\nOJO: ${orphans.length} foto(s) en photos-source/ no coinciden con ningun broker:`)
+    for (const o of orphans) {
+      const guess = closestId(o.key, brokers.map((b) => b.id))
+      const hint = guess ? `  (quiza querias '${guess}'?)` : ''
+      console.log(`  ${o.file}  ->  no hay broker con id '${o.key}'${hint}`)
+    }
+    console.log('Revisa como esta escrito el nombre contra los ids de data/members.json.')
+  }
+
+  const dupes = brokers.filter((b) => b._photo?.duplicates?.length > 0)
+  if (dupes.length > 0) {
+    console.log('\nOJO: hay mas de un archivo para el mismo broker. Se usa el primero:')
+    for (const b of dupes) {
+      console.log(`  ${b.id}: se usa ${b._photo.name}, se ignoran ${b._photo.duplicates.join(', ')}`)
+    }
   }
 }
 
@@ -235,7 +379,7 @@ async function prune(db, collection, keepIds) {
 
 // ---------------------------------------------------------------------------
 
-const plan = buildPlan()
+const plan = await buildPlan()
 printPlan(plan)
 
 if (DRY_RUN) {
