@@ -230,6 +230,84 @@ returning any document to them.
 
 ---
 
+## Import responses from the Google Form
+
+Brokers submit through the **TTL Team 1 – Quotes Control Form**. The importer
+reads the **Responses 2026** tab and turns each row into one validated
+opportunity (+1).
+
+```bash
+npm run import:dry     # show what it would do, write nothing
+npm run import         # do it
+```
+
+It also runs **automatically every day at 3:00 PM Guatemala** via
+[`.github/workflows/import.yml`](.github/workflows/import.yml), and can be
+triggered by hand from the repo's Actions tab.
+
+### What it reads, and what it refuses to read
+
+The sheet contains client data. The importer names the only columns it is
+allowed to touch, in `SAFE_COLUMNS`, and discards every other column the moment
+the row is read.
+
+| Column | Becomes |
+|---|---|
+| Timestamp | the entry's date |
+| Email Address | which broker it belongs to |
+| Load's Source | `source` — from a closed list |
+| Broker Fee | `brokerFee` |
+| Approved | `approved` when ticked, otherwise `pending` |
+| Quote's Proof | **only whether the cell is empty** → `quoteSent` |
+
+**Never read:** Client's Name, Client's Phone Number, Load Origin Address, Load
+Destination Address, Load's Dimensions. **Never stored:** the Quote's Proof link
+itself — only the true/false of whether one exists, which feeds the Phase 1
+tie-breaker.
+
+Free text is a leak risk, so `Load's Source` is reduced to the form's fixed list;
+anything typed into "Other:" is stored as plain `Other` with the text dropped.
+`Referral Provider` is skipped entirely — it holds people's names.
+
+`src/lib/privacy.test.ts` enforces all of this, and the build fails if a future
+edit tries to widen it.
+
+### Re-running is safe
+
+Each row gets a document id derived from its timestamp and the broker's email,
+so importing twice updates rather than duplicates. On re-import only the
+sheet-owned fields change (status, fee, quote-sent, source) — **points and admin
+notes are left alone**, so a manual adjustment isn't overwritten.
+
+### One-time setup
+
+1. **Enable the Sheets API** —
+   <https://console.cloud.google.com/apis/library/sheets.googleapis.com?project=ttl-incentives>
+2. **Share the sheet** with the service account as **Viewer**:
+   `firebase-adminsdk-fbsvc@ttl-incentives.iam.gserviceaccount.com`
+   (untick "Notify people" — it isn't a real mailbox)
+3. **Set the sheet's timezone to Guatemala** — File → Settings → Time zone. The
+   importer warns if it isn't, because responses near midnight would land on the
+   wrong day.
+4. **For the scheduled run**, add two repo secrets under
+   Settings → Secrets and variables → Actions:
+   - `FIREBASE_SERVICE_ACCOUNT` — the whole service account JSON
+   - `SHEET_ID` — only if the sheet ever changes
+
+### Things it does not do
+
+- **Bonus points.** Every row is +1. Cold-call, referral, first-close and Big
+  Fish bonuses need judgement, so an admin adds those in the panel.
+- **Mark fees as collected.** An imported fee arrives as *pending*, because a
+  quoted amount is not money in the bank and the $2,000 floor counts collected
+  fees. An admin ticks it when payment is confirmed. To change that, flip
+  `IMPORTED_FEE_IS_COLLECTED` in
+  [`scripts/import-sheet.js`](scripts/import-sheet.js).
+- **Invent brokers.** A response from an address that isn't on the roster is
+  skipped and reported by email, never guessed.
+
+---
+
 ## Add photos
 
 Photos are stored **inside each broker's Firestore document**, not as files on

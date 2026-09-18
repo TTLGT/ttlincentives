@@ -62,6 +62,19 @@ export interface Entry {
   status: EntryStatus
   /** Nota corta del admin. SIN INFORMACION DE CLIENTE. */
   note: string
+  /**
+   * De donde salio la oportunidad: la columna "Load's Source" del formulario.
+   * Valor de una lista cerrada (ver ENTRY_SOURCES). Nunca texto libre: si el
+   * broker escribe algo en "Other:", se guarda 'Other' a secas, porque ese
+   * campo abierto podria traer el nombre de un cliente.
+   */
+  source?: string | null
+  /**
+   * Identificador estable de la fila del Google Sheet que genero esta entrada.
+   * Sirve para que reimportar actualice en vez de duplicar.
+   * Vacio en las entradas que un admin creo a mano.
+   */
+  sourceId?: string | null
   createdBy: string
   createdAt: string
   updatedBy: string

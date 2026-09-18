@@ -66,6 +66,33 @@ export const KIND_SHORT_LABELS: Record<EntryKind, string> = {
 
 export const ENTRY_KINDS = Object.keys(POINTS_BY_KIND) as EntryKind[]
 
+/**
+ * De donde salio la oportunidad: la lista del formulario ("Load's Source").
+ * Es cerrada a proposito. Lo que el broker escriba en "Other:" se guarda como
+ * 'Other' sin el texto, porque ese campo abierto podria traer datos del cliente.
+ */
+export const ENTRY_SOURCES = [
+  'Repeat',
+  'Cold Calling',
+  'Referral',
+  'Veritread',
+  'Reactivated',
+  'Cold Emailing',
+  'Central Dispatch',
+  'Facebook',
+  'Other',
+] as const
+
+export type EntrySource = (typeof ENTRY_SOURCES)[number]
+
+/** Normaliza lo que venga del Sheet a un valor de la lista, o 'Other'. */
+export function normalizeSource(raw: string | null | undefined): EntrySource | null {
+  if (!raw) return null
+  const clean = String(raw).trim()
+  const match = ENTRY_SOURCES.find((s) => s.toLowerCase() === clean.toLowerCase())
+  return match ?? 'Other'
+}
+
 /** Los tipos que son "bono": todo lo que no es la oportunidad base ni un ajuste. */
 const BONUS_KINDS: ReadonlySet<EntryKind> = new Set<EntryKind>([
   'first_close',
@@ -469,6 +496,25 @@ export function pointsBreakdown(
     points: points[kind],
     count: counts[kind],
   })).filter((row) => row.count > 0)
+}
+
+/** Cuantas oportunidades validadas vinieron de cada fuente. */
+export function sourceBreakdown(
+  entries: Entry[],
+  brokerId?: string,
+): Array<{ source: string; count: number; points: number }> {
+  const counts = new Map<string, { count: number; points: number }>()
+  for (const entry of approvedEntries(entries)) {
+    if (brokerId && entry.brokerId !== brokerId) continue
+    const key = entry.source ?? 'Sin fuente'
+    const row = counts.get(key) ?? { count: 0, points: 0 }
+    row.count += 1
+    row.points += pointsOf(entry)
+    counts.set(key, row)
+  }
+  return [...counts.entries()]
+    .map(([source, row]) => ({ source, ...row }))
+    .sort((a, b) => b.count - a.count)
 }
 
 /** Fee cobrado y pendiente por broker, para la grafica de barras de dinero. */

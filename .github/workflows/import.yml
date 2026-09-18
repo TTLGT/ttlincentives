@@ -1,0 +1,58 @@
+name: Import form responses
+
+# Trae las respuestas del Google Form al tablero.
+#
+# Corre solo todos los dias en el corte de las 3:00 PM de Guatemala, y tambien
+# se puede disparar a mano desde la pestania Actions (boton "Run workflow").
+#
+# Antes de que esto sirva hay que cargar dos secrets en el repositorio:
+#   Settings > Secrets and variables > Actions > New repository secret
+#
+#   FIREBASE_SERVICE_ACCOUNT   el JSON completo de la service account
+#   SHEET_ID                   (opcional) id de la hoja, si cambia
+#
+# El JSON de la service account NO va en el repositorio. Vive solo como secret.
+
+on:
+  schedule:
+    # 21:00 UTC = 15:00 en Guatemala (UTC-6 todo el anio, sin horario de verano).
+    - cron: '0 21 * * *'
+  workflow_dispatch:
+
+# Una importacion a la vez: dos corriendo juntas podrian pisarse.
+concurrency:
+  group: import-sheet
+  cancel-in-progress: false
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Escribir las credenciales fuera del repositorio
+        env:
+          SA_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$SA_JSON" ]; then
+            echo "Falta el secret FIREBASE_SERVICE_ACCOUNT."
+            exit 1
+          fi
+          printf '%s' "$SA_JSON" > "$RUNNER_TEMP/sa.json"
+
+      - name: Importar
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
+          SHEET_ID: ${{ secrets.SHEET_ID }}
+        run: npm run import
+
+      - name: Borrar las credenciales
+        if: always()
+        run: rm -f "$RUNNER_TEMP/sa.json"

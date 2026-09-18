@@ -236,6 +236,8 @@ function normalizeEntry(id: string, data: Record<string, unknown>): Entry {
     feeCollected: Boolean(data.feeCollected),
     status: (data.status ?? 'pending') as EntryStatus,
     note: String(data.note ?? ''),
+    source: data.source ? String(data.source) : null,
+    sourceId: data.sourceId ? String(data.sourceId) : null,
     createdBy: String(data.createdBy ?? ''),
     createdAt: String(data.createdAt ?? ''),
     updatedBy: String(data.updatedBy ?? ''),

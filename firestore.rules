@@ -91,6 +91,9 @@ service cloud.firestore {
         return [
           'brokerId', 'date', 'kind', 'points', 'quoteSent', 'brokerFee',
           'feeCollected', 'status', 'note',
+          // De la importacion del Google Sheet. 'source' es de lista cerrada y
+          // 'sourceId' es solo un hash de la fila: ninguno lleva dato de cliente.
+          'source', 'sourceId',
           'createdBy', 'createdAt', 'updatedBy', 'updatedAt'
         ];
       }
@@ -116,7 +119,15 @@ service cloud.firestore {
           && data.status in ['pending', 'approved', 'rejected']
           // La nota es corta a proposito: es un recordatorio del admin, no un
           // lugar para pegar datos del cliente.
-          && data.note is string && data.note.size() <= 280;
+          && data.note is string && data.note.size() <= 280
+          // 'source' solo acepta valores de la lista del formulario. El servidor
+          // rechaza el texto libre de "Other:", que podria traer datos de cliente.
+          && (!('source' in data) || data.source == null || data.source in [
+               'Repeat', 'Cold Calling', 'Referral', 'Veritread', 'Reactivated',
+               'Cold Emailing', 'Central Dispatch', 'Facebook', 'Other'
+             ])
+          && (!('sourceId' in data) || data.sourceId == null ||
+              (data.sourceId is string && data.sourceId.size() <= 64));
       }
 
       allow read: if isMember();

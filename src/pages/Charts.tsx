@@ -5,6 +5,7 @@ import { CumulativeChart } from '../components/charts/CumulativeChart'
 import { WeeklyChart } from '../components/charts/WeeklyChart'
 import { FeeChart } from '../components/charts/FeeChart'
 import { BreakdownChart } from '../components/charts/BreakdownChart'
+import { SourceChart } from '../components/charts/SourceChart'
 import { useCompetition } from '../hooks/useCompetition'
 import { useData } from '../context/DataContext'
 import { useTheme } from '../context/ThemeContext'
@@ -118,13 +119,23 @@ export function Charts() {
         </ChartCard>
       </div>
 
-      <ChartCard
-        title="De donde salen los puntos"
-        subtitle="Reparto por tipo de entrada, sumando a todos los brokers."
-        height={360}
-      >
-        <BreakdownChart entries={entries} dark={dark} />
-      </ChartCard>
+      <div className="grid gap-6 xl:grid-cols-2">
+        <ChartCard
+          title="De donde salen los puntos"
+          subtitle="Reparto por tipo de entrada, sumando a todos los brokers."
+          height={360}
+        >
+          <BreakdownChart entries={entries} dark={dark} />
+        </ChartCard>
+
+        <ChartCard
+          title="De donde vienen las oportunidades"
+          subtitle="La fuente que el broker marco en el formulario."
+          height={360}
+        >
+          <SourceChart entries={entries} dark={dark} />
+        </ChartCard>
+      </div>
     </div>
   )
 }

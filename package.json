@@ -11,7 +11,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "seed": "node scripts/seed-members.js",
-    "seed:dry": "node scripts/seed-members.js --dry-run"
+    "seed:dry": "node scripts/seed-members.js --dry-run",
+    "import": "node scripts/import-sheet.js",
+    "import:dry": "node scripts/import-sheet.js --dry-run"
   },
   "dependencies": {
     "firebase": "^12.19.0",
@@ -28,6 +30,7 @@
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",
     "firebase-admin": "^14.4.0",
+    "googleapis": "^181.0.0",
     "oxlint": "^1.81.0",
     "sharp": "^0.35.4",
     "tailwindcss": "^4.3.3",

@@ -4,6 +4,7 @@ import { Avatar } from '../components/Avatar'
 import { ChartCard } from '../components/ChartCard'
 import { BrokerDailyChart } from '../components/charts/BrokerDailyChart'
 import { BreakdownChart } from '../components/charts/BreakdownChart'
+import { SourceChart } from '../components/charts/SourceChart'
 import { QualificationBadge } from '../components/QualificationBadge'
 import { StatusPill } from '../components/StatusPill'
 import { useCompetition } from '../hooks/useCompetition'
@@ -102,6 +103,14 @@ export function BrokerPage() {
         <ChartCard title="De donde salen sus puntos" subtitle="Reparto por tipo de entrada." height={330}>
           <BreakdownChart entries={entries} brokerId={broker.id} dark={dark} />
         </ChartCard>
+
+        <ChartCard
+          title="De donde vienen sus oportunidades"
+          subtitle="La fuente que marco en el formulario."
+          height={330}
+        >
+          <SourceChart entries={entries} brokerId={broker.id} dark={dark} />
+        </ChartCard>
       </div>
 
       <section className="card overflow-hidden">
@@ -118,11 +127,12 @@ export function BrokerPage() {
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-left text-sm">
+            <table className="w-full min-w-[820px] text-left text-sm">
               <thead className="bg-navy-50 text-xs tracking-wide text-navy-600 uppercase dark:bg-navy-950/60 dark:text-navy-300">
                 <tr>
                   <th scope="col" className="px-4 py-2.5 sm:px-6">Fecha</th>
                   <th scope="col" className="px-4 py-2.5">Tipo</th>
+                  <th scope="col" className="px-4 py-2.5">Fuente</th>
                   <th scope="col" className="px-4 py-2.5 text-right">Puntos</th>
                   <th scope="col" className="px-4 py-2.5 text-right">Broker fee</th>
                   <th scope="col" className="px-4 py-2.5">Estado</th>
@@ -137,6 +147,9 @@ export function BrokerPage() {
                     </td>
                     <td className="px-4 py-2.5 text-navy-800 dark:text-navy-100">
                       {KIND_SHORT_LABELS[entry.kind]}
+                    </td>
+                    <td className="px-4 py-2.5 text-navy-600 dark:text-navy-300">
+                      {entry.source || <span className="text-navy-400">-</span>}
                     </td>
                     <td className="tnum px-4 py-2.5 text-right font-semibold text-navy-950 dark:text-white">
                       {entry.status === 'approved' ? signedPoints(pointsOf(entry)) : '-'}
