@@ -320,10 +320,12 @@ single flag or constant in `src/config/competition.ts` if it ever changes:
 
 ## A note on the roster
 
-One broker's email prefix does not match his name: his mailbox is **`selvin@`**,
-but he is listed as **ALEX FLORES**, with broker id `alex-flores` and photo file
-`alex-flores.jpg` — matching the rules PDF.
+Two brokers have similar-looking accounts. They are different people:
 
-This is deliberate, so don't "fix" the mismatch by renaming the id to match the
-email. The email prefix and the broker id are independent: `local` is his real
-mailbox, `id` is what links his photo and his scored entries.
+| Email | Name | Broker id |
+|---|---|---|
+| `alex@` | ALEX FLORES | `alex-flores` |
+| `alexis@` | ALEXIS GARCIA | `alexis-garcia` |
+
+Don't merge or autocomplete one into the other when editing
+[`data/members.json`](data/members.json).
