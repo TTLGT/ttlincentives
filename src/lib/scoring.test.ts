@@ -24,7 +24,7 @@ const broker = (id: string, name: string): Broker => ({
   id,
   name,
   email: `${id}@totaltransportlogistics.us`,
-  photoPath: `photos/${id}.jpg`,
+  photoData: null,
   active: true,
   joinedAt: '2026-09-16',
 })

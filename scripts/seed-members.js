@@ -18,12 +18,50 @@
  * nombres de brokers y roles.
  */
 
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const DATA_FILE = resolve(HERE, '..', 'data', 'members.json')
+
+/**
+ * Carpeta local con las fotos. NO se sube al repositorio (esta en .gitignore).
+ *
+ * Las fotos se guardan dentro del documento de cada broker en Firestore, no
+ * como archivos del sitio: lo que se publica en GitHub Pages lo puede bajar
+ * cualquiera sin iniciar sesion. Desde Firestore, las protegen las mismas
+ * reglas que el resto de los datos.
+ */
+const PHOTOS_DIR = resolve(HERE, '..', 'photos-source')
+
+/** Limite propio, bien por debajo del maximo de 1 MB por documento. */
+const MAX_PHOTO_BYTES = 700 * 1024
+
+const PHOTO_TYPES = [
+  ['.jpg', 'image/jpeg'],
+  ['.jpeg', 'image/jpeg'],
+  ['.png', 'image/png'],
+  ['.webp', 'image/webp'],
+]
+
+/** Busca la foto de un broker y la devuelve como data URI, o null si no hay. */
+function readPhoto(brokerId) {
+  for (const [ext, mime] of PHOTO_TYPES) {
+    const file = resolve(PHOTOS_DIR, brokerId + ext)
+    if (!existsSync(file)) continue
+    const bytes = readFileSync(file)
+    if (bytes.length > MAX_PHOTO_BYTES) {
+      return { error: `pesa ${(bytes.length / 1024).toFixed(0)} KB (maximo ${MAX_PHOTO_BYTES / 1024} KB)` }
+    }
+    return {
+      dataUri: `data:${mime};base64,${bytes.toString('base64')}`,
+      bytes: bytes.length,
+      name: brokerId + ext,
+    }
+  }
+  return null
+}
 
 const args = new Set(process.argv.slice(2))
 const DRY_RUN = args.has('--dry-run') || args.has('-n')
@@ -72,14 +110,21 @@ function buildPlan() {
 
   for (const broker of raw.brokers) {
     const key = email(broker.local)
-    brokers.push({
+    const doc = {
       id: broker.id,
       name: broker.name,
       email: key,
-      photoPath: `photos/${broker.id}.jpg`,
       active: true,
       joinedAt,
-    })
+    }
+
+    // photoData solo se incluye si de verdad hay archivo. Asi, correr el seed
+    // sin la carpeta de fotos NO borra las que ya estan cargadas.
+    const photo = readPhoto(broker.id)
+    if (photo?.dataUri) doc.photoData = photo.dataUri
+    doc._photo = photo
+
+    brokers.push(doc)
     const existing = members.get(key)
     if (existing) {
       // Un admin que ademas compite conserva su rol de admin.
@@ -100,14 +145,32 @@ function printPlan({ members, brokers }) {
     console.log(`  ${tag}  ${m.email.padEnd(45)} brokerId=${m.brokerId ?? 'null'}`)
   }
   console.log(`\nbrokers/  ->  ${brokers.length} documentos`)
+  let withPhoto = 0
+  const oversized = []
   for (const b of brokers) {
-    console.log(`  ${b.id.padEnd(20)} ${b.name.padEnd(20)} ${b.photoPath}`)
+    let note = 'sin foto (se muestran las iniciales)'
+    if (b._photo?.error) {
+      note = `FOTO IGNORADA: ${b._photo.error}`
+      oversized.push(b.id)
+    } else if (b._photo?.dataUri) {
+      note = `foto ${b._photo.name} (${(b._photo.bytes / 1024).toFixed(0)} KB)`
+      withPhoto++
+    }
+    console.log(`  ${b.id.padEnd(20)} ${b.name.padEnd(20)} ${note}`)
   }
 
   const admins = members.filter((m) => m.role === 'admin').length
   console.log(
     `\nResumen: ${admins} admin(s), ${members.length - admins} viewer(s), ${brokers.length} brokers.`,
   )
+  console.log(`Fotos encontradas en photos-source/: ${withPhoto} de ${brokers.length}.`)
+  if (withPhoto === 0) {
+    console.log('(Los brokers sin foto salen con sus iniciales. El sitio se ve terminado igual.)')
+  }
+  if (oversized.length > 0) {
+    console.log(`\nOJO: estas fotos pesan de mas y NO se van a subir: ${oversized.join(', ')}`)
+    console.log('Reducilas a 400x400 y volve a correr.')
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -141,7 +204,9 @@ async function write(plan) {
     batch.set(db.collection('members').doc(member.email), member, { merge: true })
   }
   for (const broker of plan.brokers) {
-    batch.set(db.collection('brokers').doc(broker.id), broker, { merge: true })
+    const { _photo, ...doc } = broker
+    void _photo
+    batch.set(db.collection('brokers').doc(broker.id), doc, { merge: true })
   }
   await batch.commit()
   console.log(

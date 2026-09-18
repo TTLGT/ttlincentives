@@ -26,7 +26,15 @@ export interface Broker {
   id: string
   name: string
   email: string
-  photoPath: string
+  /**
+   * La foto va EMBEBIDA en el documento, como data URI ('data:image/jpeg;base64,...').
+   *
+   * No se sirve como archivo del sitio a proposito: los archivos de GitHub
+   * Pages son publicos para cualquiera, y las fotos del equipo no deben
+   * quedar accesibles sin sesion. Guardarlas aqui las deja protegidas por las
+   * mismas reglas de Firestore que protegen todo lo demas.
+   */
+  photoData?: string | null
   active: boolean
   joinedAt: string
 }

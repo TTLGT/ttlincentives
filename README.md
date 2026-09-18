@@ -211,8 +211,8 @@ npm run seed -- --prune          # also deletes anyone no longer in the JSON
 2. `npm run seed:dry` and read the plan.
 3. `npm run seed` (add `-- --prune` to remove people who were dropped from the
    JSON).
-4. For a new broker, add their photo — see
-   [`public/photos/README.md`](public/photos/README.md).
+4. For a new broker, drop their photo into `photos-source/` and re-run the seed
+   — see [Add photos](#add-photos).
 5. Commit and push so the repo stays the source of truth.
 
 Removing someone from `members/` locks them out immediately — the rules stop
@@ -222,14 +222,42 @@ returning any document to them.
 
 ## Add photos
 
-Photos live in [`public/photos/`](public/photos/), named after the broker id
-(`alex-flores.jpg`), square, 400×400. Google Drive links do not work as image
-sources, which is why they have to be in the repo.
+Photos are stored **inside each broker's Firestore document**, not as files on
+the website.
 
-Until a photo exists the site draws a navy circle with the broker's initials.
-**The site looks finished with zero photos present.**
+That is deliberate. This repo is public and GitHub Pages serves every published
+file to anyone — no sign-in. A photo in `public/` could be downloaded by a
+stranger who guessed the URL. Coming from Firestore, photos are protected by the
+same rules that protect everything else: signed out, you get nothing.
 
-Full instructions: [`public/photos/README.md`](public/photos/README.md).
+### How to add them
+
+1. Create a folder called **`photos-source/`** in the project root. It is
+   gitignored, so nothing in it can reach the public repo.
+2. From the Drive folder "📷 Fotos de Empleados", save each photo there named
+   after the broker id, cropped square and resized to **400×400**:
+   `alex-flores.jpg`, `alexis-garcia.jpg`, … (`.jpg`, `.png` and `.webp` all work).
+   The ids are in [`data/members.json`](data/members.json).
+3. Re-run the seed:
+
+   ```powershell
+   $env:GOOGLE_APPLICATION_CREDENTIALS = "C:\keys\<your-key>.json"
+   npm run seed:dry     # shows which photos it found and how big they are
+   npm run seed
+   ```
+
+They appear on the site immediately — no rebuild, no deploy.
+
+### Good to know
+
+- **Add them a few at a time.** A broker with no photo shows a navy circle with
+  their initials. **The site looks finished with zero photos.**
+- **Re-running the seed without `photos-source/` will not erase photos already
+  uploaded.** The script only writes a photo when it actually finds a file.
+- Keep each file under **700 KB** — a Firestore document maxes out at 1 MB. The
+  seed refuses anything bigger and tells you which one. A 400×400 JPG is
+  normally well under 100 KB.
+- To replace someone's photo, overwrite the file and re-run the seed.
 
 ---
 

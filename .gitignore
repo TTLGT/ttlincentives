@@ -16,3 +16,9 @@ firebase-adminsdk*.json
 .vscode/*
 !.vscode/extensions.json
 .idea
+
+# Fotos de los brokers: se quedan LOCALES.
+# Se suben a Firestore con el seed, dentro del documento de cada broker, para
+# que las protejan las reglas. Nunca al repositorio: es publico, y lo que se
+# publica en GitHub Pages lo baja cualquiera sin iniciar sesion.
+photos-source/

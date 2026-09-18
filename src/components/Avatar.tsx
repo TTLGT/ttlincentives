@@ -11,7 +11,7 @@ const SIZES = {
 } as const
 
 interface Props {
-  broker: Pick<Broker, 'id' | 'name' | 'photoPath'>
+  broker: Pick<Broker, 'id' | 'name' | 'photoData'>
   size?: keyof typeof SIZES
   ring?: boolean
 }
@@ -19,18 +19,23 @@ interface Props {
 /**
  * Foto del broker, con las iniciales como respaldo.
  *
- * El sitio debe verse terminado con cero fotos en public/photos/, asi que el
- * respaldo no es un placeholder gris: es un circulo de marca con iniciales.
+ * La imagen viene EMBEBIDA en el documento del broker (data URI), no de un
+ * archivo del sitio. Es a proposito: cualquier archivo publicado en GitHub
+ * Pages lo puede bajar cualquiera sin iniciar sesion, y las fotos del equipo
+ * no deben quedar expuestas asi. Viniendo de Firestore, las protegen las
+ * mismas reglas que protegen el resto de los datos.
+ *
+ * El sitio debe verse terminado con cero fotos cargadas, asi que el respaldo
+ * no es un placeholder gris: es un circulo de marca con las iniciales.
  */
 export function Avatar({ broker, size = 'md', ring = false }: Props) {
   const [failed, setFailed] = useState(false)
-  const src = import.meta.env.BASE_URL + (broker.photoPath || `photos/${broker.id}.jpg`)
 
   const base = `${SIZES[size]} shrink-0 rounded-full object-cover ${
     ring ? 'ring-3 ring-white dark:ring-navy-700' : ''
   }`
 
-  if (failed) {
+  if (!broker.photoData || failed) {
     return (
       <div
         className={`${base} flex items-center justify-center bg-navy-700 font-bold tracking-wide text-white dark:bg-navy-600`}
@@ -43,9 +48,8 @@ export function Avatar({ broker, size = 'md', ring = false }: Props) {
 
   return (
     <img
-      src={src}
+      src={broker.photoData}
       alt=""
-      loading="lazy"
       onError={() => setFailed(true)}
       className={`${base} bg-navy-200 dark:bg-navy-800`}
     />
