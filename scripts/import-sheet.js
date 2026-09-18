@@ -114,6 +114,34 @@ if (args.has('--help') || args.has('-h')) {
 // Utilidades
 // ---------------------------------------------------------------------------
 
+/**
+ * Si una zona horaria tiene el mismo desfase que Guatemala en toda la ventana
+ * de la competencia. America/Belize, por ejemplo, es UTC-6 sin horario de
+ * verano igual que Guatemala, asi que las fechas salen identicas y no hay
+ * nada que avisar.
+ */
+function sameOffsetAsGuatemala(tz) {
+  const probes = [`${COMPETITION_START}T05:00:00Z`, `${COMPETITION_END}T23:00:00Z`]
+  try {
+    return probes.every((iso) => offsetMinutes(tz, new Date(iso)) === offsetMinutes(GUATEMALA_TZ, new Date(iso)))
+  } catch {
+    return false
+  }
+}
+
+/** Minutos de desfase de una zona horaria en un instante dado. */
+function offsetMinutes(tz, instant) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz,
+    hour12: false,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }).formatToParts(instant)
+  const get = (type) => Number(parts.find((p) => p.type === type).value)
+  const asUtc = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour') % 24, get('minute'), get('second'))
+  return Math.round((asUtc - instant.getTime()) / 60000)
+}
+
 /** Id estable de una fila: mismo timestamp y mismo correo -> misma entrada. */
 function rowId(timestamp, email) {
   return 'sheet_' + createHash('sha1').update(`${timestamp}|${email.toLowerCase()}`).digest('hex').slice(0, 24)
@@ -168,9 +196,13 @@ async function fetchRows() {
   // la fecha de cada entrada dependen de eso.
   const meta = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID, fields: 'properties.timeZone' })
   const tz = meta.data.properties?.timeZone
-  if (tz && tz !== GUATEMALA_TZ) {
+  // Lo que importa no es el nombre de la zona sino el desfase real: hay varias
+  // que son UTC-6 sin horario de verano igual que Guatemala (Belize, por
+  // ejemplo), y en esas la fecha sale idéntica. Solo se avisa si de verdad
+  // difiere en algun dia de la competencia.
+  if (tz && tz !== GUATEMALA_TZ && !sameOffsetAsGuatemala(tz)) {
     console.warn(
-      `\nAVISO: la hoja esta en zona horaria "${tz}", no en ${GUATEMALA_TZ}.\n` +
+      `\nAVISO: la hoja esta en zona horaria "${tz}", que no coincide con ${GUATEMALA_TZ}.\n` +
         'Las respuestas cerca de la medianoche pueden caer en el dia equivocado.\n' +
         'Se arregla en Google Sheets: Archivo > Configuracion > Zona horaria.\n',
     )
@@ -202,8 +234,12 @@ function extractSafeRows(header, rows) {
     at[key] = idx
   }
 
+  // 'approved' y 'fee' son opcionales: un cambio en el formulario de Google
+  // reescribe las columnas de respuestas y se puede llevar por delante una
+  // columna agregada a mano. Sin ellas la importacion sigue corriendo.
+  const OPTIONAL = new Set(['approved', 'fee', 'quoteProofPresence'])
   const missing = Object.entries(SAFE_COLUMNS)
-    .filter(([key]) => at[key] === -1)
+    .filter(([key]) => at[key] === -1 && !OPTIONAL.has(key))
     .map(([, name]) => name)
 
   const safe = rows.map((row) => ({
@@ -217,14 +253,14 @@ function extractSafeRows(header, rows) {
       at.quoteProofPresence >= 0 ? String(row[at.quoteProofPresence] ?? '').trim().length > 0 : false,
   }))
 
-  return { safe, missing }
+  return { safe, missing, hasApprovedColumn: at.approved !== -1 }
 }
 
 // ---------------------------------------------------------------------------
 // Armar las entradas
 // ---------------------------------------------------------------------------
 
-function buildEntries(safeRows, brokerByEmail) {
+function buildEntries(safeRows, brokerByEmail, hasApprovedColumn) {
   const entries = []
   const skipped = { blank: 0, unknownEmail: [], outOfRange: [], badDate: 0 }
 
@@ -266,7 +302,9 @@ function buildEntries(safeRows, brokerByEmail) {
       quoteSent: row.hasQuoteProof,
       brokerFee: toMoney(row.fee),
       feeCollected: IMPORTED_FEE_IS_COLLECTED && toMoney(row.fee) > 0,
-      status: isChecked(row.approved) ? 'approved' : 'pending',
+      // Sin columna Approved, todo entra como pendiente y se valida en el
+      // panel del sitio, que ya tiene su cola de aprobacion.
+      status: hasApprovedColumn && isChecked(row.approved) ? 'approved' : 'pending',
       note: '',
       source: normalizeSource(row.source),
       sourceId: rowId(row.timestamp, row.email),
@@ -321,7 +359,7 @@ async function main() {
     return
   }
 
-  const { safe, missing } = extractSafeRows(header, rows)
+  const { safe, missing, hasApprovedColumn } = extractSafeRows(header, rows)
   if (missing.length > 0) {
     console.error(
       `\nA la hoja le faltan columnas que este script necesita: ${missing.join(', ')}\n` +
@@ -330,7 +368,7 @@ async function main() {
     process.exit(1)
   }
 
-  const { entries, skipped } = buildEntries(safe, brokerByEmail)
+  const { entries, skipped } = buildEntries(safe, brokerByEmail, hasApprovedColumn)
 
   // Que hay ya en Firestore para estas filas
   const existing = new Map()
@@ -345,7 +383,7 @@ async function main() {
     const prev = existing.get(e.id)
     if (!prev) return false
     return (
-      prev.status !== e.status ||
+      (hasApprovedColumn && prev.status !== e.status) ||
       Number(prev.brokerFee ?? 0) !== e.brokerFee ||
       Boolean(prev.quoteSent) !== e.quoteSent ||
       (prev.source ?? null) !== e.source
@@ -359,6 +397,17 @@ async function main() {
   console.log(`  nuevas:        ${toCreate.length}`)
   console.log(`  con cambios:   ${toUpdate.length}`)
   console.log(`  sin cambios:   ${entries.length - toCreate.length - toUpdate.length}`)
+
+  if (!hasApprovedColumn) {
+    console.log(
+      [
+        '',
+        'NOTA: la hoja no tiene columna "Approved".',
+        'Todo entra como PENDIENTE y se aprueba desde el panel del sitio.',
+        'Reimportar no revierte lo que ya hayas validado ahi.',
+      ].join('\n'),
+    )
+  }
 
   const approved = entries.filter((e) => e.status === 'approved').length
   console.log(`\nAprobadas (casilla marcada): ${approved}`)
@@ -417,7 +466,9 @@ async function main() {
         // Solo lo que manda la hoja. Los puntos y la nota se dejan como esten,
         // para no pisar lo que un admin haya ajustado a mano.
         batch.update(ref, {
-          status: e.status,
+          // El estado solo se toca si la hoja lo manda. Si la aprobacion vive
+          // en el sitio, reimportar nunca revierte lo que ya valido un admin.
+          ...(hasApprovedColumn ? { status: e.status } : {}),
           brokerFee: e.brokerFee,
           feeCollected: e.feeCollected,
           quoteSent: e.quoteSent,
