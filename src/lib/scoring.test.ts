@@ -50,7 +50,7 @@ function entry(partial: Partial<Entry> & { brokerId: string; date: string }): En
 }
 
 const A = broker('alexis-garcia', 'ALEXIS GARCIA')
-const B = broker('selvin-flores', 'SELVIN FLORES')
+const B = broker('alex-flores', 'ALEX FLORES')
 
 describe('fechas en hora de Guatemala', () => {
   it('resta seis horas al instante UTC', () => {

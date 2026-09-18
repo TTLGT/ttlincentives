@@ -78,14 +78,14 @@ not used here.
 
 ### 2. Create the Firestore database
 
-1. **Build → Firestore Database → Create database**
+1. Left sidebar: **Databases & Storage → Firestore → Create database**
 2. Start in **production mode** (locked). The rules in this repo replace the
    defaults.
 3. Pick a region close to Guatemala — `us-central1` or `nam5` is fine.
 
 ### 3. Turn on Google sign-in
 
-1. **Build → Authentication → Get started → Google → Enable**
+1. Left sidebar: **Authentication → Sign-in method → Google → Enable**
 2. Set a support email and save.
 
 ### 4. Authorize the domains
@@ -223,7 +223,7 @@ returning any document to them.
 ## Add photos
 
 Photos live in [`public/photos/`](public/photos/), named after the broker id
-(`selvin-flores.jpg`), square, 400×400. Google Drive links do not work as image
+(`alex-flores.jpg`), square, 400×400. Google Drive links do not work as image
 sources, which is why they have to be in the repo.
 
 Until a photo exists the site draws a navy circle with the broker's initials.
@@ -244,7 +244,7 @@ One-time setup: **repo Settings → Pages → Source → GitHub Actions**.
 If the repo is not served at `/ttlincentives/` (custom domain, or a rename),
 change `base` in [`vite.config.ts`](vite.config.ts).
 
-The app uses `HashRouter`, so URLs look like `/#/broker/selvin-flores`. That is
+The app uses `HashRouter`, so URLs look like `/#/broker/alex-flores`. That is
 deliberate — GitHub Pages returns 404 for any path that is not a real file, so
 hash routes are the only ones that survive a refresh or a shared link.
 
@@ -320,7 +320,10 @@ single flag or constant in `src/config/competition.ts` if it ever changes:
 
 ## A note on the roster
 
-`selvin@` is **SELVIN FLORES**. The rules PDF and some older notes give him a
-different first and last name — those are wrong, and that incorrect name is
-deliberately absent from this repository. Use SELVIN FLORES everywhere: broker id
-`selvin-flores`, photo file `selvin-flores.jpg`.
+One broker's email prefix does not match his name: his mailbox is **`selvin@`**,
+but he is listed as **ALEX FLORES**, with broker id `alex-flores` and photo file
+`alex-flores.jpg` — matching the rules PDF.
+
+This is deliberate, so don't "fix" the mismatch by renaming the id to match the
+email. The email prefix and the broker id are independent: `local` is his real
+mailbox, `id` is what links his photo and his scored entries.

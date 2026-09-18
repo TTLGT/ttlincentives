@@ -12,13 +12,13 @@ una pagina, asi que la foto sale rota. Por eso se bajan y se suben al repo.
 4. Guardala en esta carpeta con el **id del broker** como nombre y extension
    `.jpg`, en minusculas.
 
-Ejemplo: la foto de SELVIN FLORES va como `selvin-flores.jpg`.
+Ejemplo: la foto de ALEX FLORES va como `alex-flores.jpg`.
 
 ## Nombres exactos de los 25 archivos
 
 ```
 alexis-garcia.jpg
-selvin-flores.jpg
+alex-flores.jpg
 andrew-galicia.jpg
 bryan-guerra.jpg
 james-pena.jpg

@@ -44,7 +44,7 @@ export function progressPct(current: number, target: number): number {
   return Math.max(0, Math.min(100, Math.round((current / target) * 100)))
 }
 
-/** Convierte un nombre a un id kebab-case: 'SELVIN FLORES' -> 'selvin-flores'. */
+/** Convierte un nombre a un id kebab-case: 'ALEX FLORES' -> 'alex-flores'. */
 export function toBrokerId(name: string): string {
   return name
     .toLowerCase()

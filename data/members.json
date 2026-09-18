@@ -19,7 +19,7 @@
   ],
   "brokers": [
     { "local": "alexis", "id": "alexis-garcia", "name": "ALEXIS GARCIA" },
-    { "local": "selvin", "id": "selvin-flores", "name": "SELVIN FLORES" },
+    { "local": "selvin", "id": "alex-flores", "name": "ALEX FLORES" },
     { "local": "andrew", "id": "andrew-galicia", "name": "ANDREW GALICIA" },
     { "local": "bryan", "id": "bryan-guerra", "name": "BRYAN GUERRA" },
     { "local": "james", "id": "james-pena", "name": "JAMES PENA" },
