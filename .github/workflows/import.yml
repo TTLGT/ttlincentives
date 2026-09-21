@@ -10,7 +10,7 @@ run-name: >-
 #
 # Corre solo CADA 10 MINUTOS para que los gerentes vean el tablero casi en vivo,
 # y tambien se puede disparar a mano desde la pestania Actions (boton
-# "Run workflow"). Ver el README, seccion "Actualizar el tablero a mano".
+# "Run workflow"), o desde el boton "Actualizar ahora" del panel de admin.
 #
 # Importar seguido es barato y seguro:
 #   - El script compara contra Firestore y NO escribe nada si nada cambio.

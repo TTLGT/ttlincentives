@@ -25,7 +25,10 @@ const FORBIDDEN_COLUMNS = [
 ]
 
 describe('el importador no toca datos de cliente', () => {
-  const script = read('scripts/import-sheet.js')
+  // El motor vive aqui y lo comparten los dos llamadores: la linea de comandos
+  // (scripts/import-sheet.js, que usa GitHub Actions) y el boton del panel
+  // (functions/index.js). Revisando este archivo se revisan los dos.
+  const script = read('functions/import-core.js')
 
   it('no nombra ninguna columna de cliente como campo a leer', () => {
     // Se permite nombrarlas en los comentarios que explican por que se excluyen,
@@ -113,7 +116,7 @@ describe('la fuente es una lista cerrada', () => {
   })
 
   it('la lista del importador coincide con la del sitio', () => {
-    const script = read('scripts/import-sheet.js')
+    const script = read('functions/import-core.js')
     for (const source of ENTRY_SOURCES) {
       expect(script).toContain(`'${source}'`)
     }

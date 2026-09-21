@@ -11,6 +11,7 @@
 import { initializeApp, type FirebaseOptions } from 'firebase/app'
 import { getAuth, GoogleAuthProvider } from 'firebase/auth'
 import { getFirestore } from 'firebase/firestore'
+import { getFunctions } from 'firebase/functions'
 
 /**
  * Valores del proyecto de Firebase.
@@ -56,6 +57,12 @@ const app = initializeApp(firebaseConfig)
 
 export const auth = getAuth(app)
 export const db = getFirestore(app)
+
+/**
+ * Las Cloud Functions. Solo se usa runImportNow, el boton "Actualizar ahora"
+ * del panel. La region debe coincidir con la de functions/index.js.
+ */
+export const functions = getFunctions(app, 'us-central1')
 
 export const googleProvider = new GoogleAuthProvider()
 /** Sugiere la cuenta corporativa en el selector de Google. */

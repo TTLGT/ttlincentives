@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Check, Fish, Pencil, Plus, Save, Trash2, X, Zap } from 'lucide-react'
+import { Check, Fish, Pencil, Plus, RefreshCw, Save, Trash2, X, Zap } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import { useCompetition } from '../hooks/useCompetition'
@@ -20,6 +20,7 @@ import {
   COMPETITION_END,
   COMPETITION_START,
 } from '../config/competition'
+import { describeImport, runImportNow } from '../lib/importNow'
 import type { Entry, EntryDraft, EntryKind, EntryStatus } from '../types'
 
 /** Estado vacio del formulario, con la fecha de hoy en Guatemala. */
@@ -40,13 +41,31 @@ function emptyDraft(date: string): EntryDraft {
 export function Admin() {
   const { isAdmin, user } = useAuth()
   const { todayGt, standings } = useCompetition()
-  const { brokers, entries, addEntry, updateEntry, setEntryStatus, deleteEntry, addComment } = useData()
+  const { brokers, entries, addEntry, updateEntry, setEntryStatus, deleteEntry } = useData()
 
   const [draft, setDraft] = useState<EntryDraft>(() => emptyDraft(todayGt))
   const [editingId, setEditingId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [failure, setFailure] = useState<string | null>(null)
+  const [importing, setImporting] = useState(false)
+
+  /**
+   * Trae las respuestas del formulario a mano. No hace falta refrescar la
+   * pagina despues: el tablero escucha Firestore y se actualiza solo.
+   */
+  async function importNow(dryRun: boolean) {
+    setImporting(true)
+    setMessage(null)
+    setFailure(null)
+    try {
+      setMessage(describeImport(await runImportNow(dryRun)))
+    } catch (err) {
+      setFailure((err as { message?: string })?.message ?? 'No se pudo importar.')
+    } finally {
+      setImporting(false)
+    }
+  }
 
   // Segunda revision del lado del navegador. La de verdad esta en firestore.rules.
   if (!isAdmin) {
@@ -163,6 +182,8 @@ export function Admin() {
         </p>
       )}
 
+      <ImportPanel busy={importing} onRun={importNow} />
+
       <QuickAdd brokers={brokers} onAdd={quickAdd} busy={busy} today={todayGt} />
 
       <EntryForm
@@ -206,16 +227,6 @@ export function Admin() {
         }
       />
 
-      <CommentForm
-        brokers={brokers}
-        busy={busy}
-        onSubmit={(brokerId, text) =>
-          run(`Comentario publicado sobre ${brokerName(brokerId)}.`, () =>
-            addComment(brokerId, text),
-          )
-        }
-      />
-
       <RecentEntries
         entries={recent}
         brokerName={brokerName}
@@ -232,6 +243,40 @@ export function Admin() {
 }
 
 // ---------------------------------------------------------------------------
+
+/**
+ * El boton "Actualizar ahora".
+ *
+ * El navegador no lee el Google Sheet: la hoja tiene datos de cliente y es
+ * privada. Esto le pide a una Cloud Function que corra la importacion del lado
+ * del servidor. Lo mismo que hace GitHub Actions cada 10 minutos, pero cuando
+ * uno no quiere esperar.
+ */
+function ImportPanel({ busy, onRun }: { busy: boolean; onRun: (dryRun: boolean) => void }) {
+  return (
+    <section className="card p-6">
+      <h2 className="flex items-center gap-2 text-lg font-bold text-navy-950 dark:text-white">
+        <RefreshCw size={18} className={busy ? 'animate-spin' : undefined} />
+        Respuestas del formulario
+      </h2>
+      <p className="mt-1 text-sm text-navy-600 dark:text-navy-300">
+        Se importan solas cada 10 minutos. Usa este boton si no quieres esperar.
+        Las filas con la casilla <strong>Approved</strong> marcada entran validadas; el resto
+        cae en la cola de validacion.
+      </p>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button type="button" className="btn-primary" onClick={() => onRun(false)} disabled={busy}>
+          <RefreshCw size={16} className={busy ? 'animate-spin' : undefined} />
+          {busy ? 'Importando...' : 'Actualizar ahora'}
+        </button>
+        <button type="button" className="btn-ghost" onClick={() => onRun(true)} disabled={busy}>
+          Solo ver que haria
+        </button>
+      </div>
+    </section>
+  )
+}
 
 function QuickAdd({
   brokers,
@@ -593,58 +638,6 @@ function BigFishPanel({
           ))}
         </ul>
       )}
-    </section>
-  )
-}
-
-function CommentForm({
-  brokers,
-  busy,
-  onSubmit,
-}: {
-  brokers: { id: string; name: string }[]
-  busy: boolean
-  onSubmit: (brokerId: string, text: string) => void
-}) {
-  const [brokerId, setBrokerId] = useState('')
-  const [text, setText] = useState('')
-
-  return (
-    <section className="card p-4 sm:p-6">
-      <h2 className="text-lg font-bold text-navy-950 dark:text-white">Comentario sobre un broker</h2>
-      <p className="mt-1 text-sm text-navy-600 dark:text-navy-300">
-        Lo ven todos los que tienen acceso. Sin datos de cliente.
-      </p>
-      <form
-        className="mt-4 grid gap-3 sm:grid-cols-[220px_1fr_auto]"
-        onSubmit={(event) => {
-          event.preventDefault()
-          if (!brokerId || !text.trim()) return
-          onSubmit(brokerId, text)
-          setText('')
-        }}
-      >
-        <select className="field" value={brokerId} onChange={(e) => setBrokerId(e.target.value)} required>
-          <option value="">Elegir broker...</option>
-          {brokers.map((broker) => (
-            <option key={broker.id} value={broker.id}>
-              {broker.name}
-            </option>
-          ))}
-        </select>
-        <input
-          type="text"
-          className="field"
-          value={text}
-          maxLength={1000}
-          placeholder="Comentario"
-          onChange={(e) => setText(e.target.value)}
-          required
-        />
-        <button type="submit" className="btn-primary" disabled={busy}>
-          Publicar
-        </button>
-      </form>
     </section>
   )
 }

@@ -259,24 +259,65 @@ Importing this often is safe and free:
 
 ### Update the board by hand
 
-When a manager wants the board refreshed *right now* instead of waiting for the
-next 10-minute run:
+Managers do this from the **Admin panel** on the site itself — no GitHub account
+needed. Under **Respuestas del formulario** there are two buttons:
 
-1. Open the repo's **Actions** tab.
-2. Pick **Import form responses** in the left sidebar.
-3. Click **Run workflow** (top right), leave the branch on `main`, and confirm.
+| Button | What it does |
+|---|---|
+| **Actualizar ahora** | imports right away; the board updates itself when it finishes |
+| **Solo ver que haria** | reports what it *would* import and writes nothing |
 
-It finishes in about a minute, and the board updates on its own once it does.
-Runs are labelled **A mano** when a person started one and **Automatico** when
-the schedule did, so it is obvious in the list who triggered what.
+It runs the same importer as the schedule, so nothing can drift between them.
 
-Tick **"Solo ver que haria"** before confirming to get a preview instead: the
-run reports what it *would* import and writes nothing. Useful for checking a
-suspicious row without touching the leaderboard.
+The browser never touches the Google Sheet. The sheet is private and holds
+client data, and the service-account key cannot live in a bundle served from a
+public GitHub Pages site. The button calls a Cloud Function
+([`functions/index.js`](functions/index.js)) that runs the import server-side
+and returns only counts.
 
-> Managers need a GitHub account with write access to `TTLGT/ttlincentives` for
-> the Run workflow button to appear. Add them under
-> **Settings > Collaborators and teams**.
+Only the accounts in `ADMIN_EMAILS` can call it, and the function re-checks
+`members/{email}.role == 'admin'` on every call — being on the list is not
+enough if the member document says otherwise.
+
+The **Actions** tab still works as a fallback (**Run workflow**, with an
+optional dry-run checkbox) if the site is ever down.
+
+### One importer, two callers
+
+The logic — and the privacy filter — lives in exactly one file,
+[`functions/import-core.js`](functions/import-core.js):
+
+```
+functions/import-core.js     <- SAFE_COLUMNS y toda la logica
+        |
+        +-- scripts/import-sheet.js   linea de comandos + GitHub Actions
+        +-- functions/index.js        el boton del panel
+```
+
+`src/lib/privacy.test.ts` reads that core file and fails the build if a client
+column ever appears in `SAFE_COLUMNS`, so both callers are covered by one test.
+
+### Deploy the Cloud Function
+
+The function needs the Firebase project on the **Blaze** plan — Cloud Functions
+and outbound calls to the Sheets API are not available on Spark.
+
+```bash
+cd functions && npm install && cd ..
+firebase deploy --only functions
+```
+
+It is configured to run as the **same service account** GitHub Actions already
+uses, so the sheet does not have to be shared again:
+
+```
+firebase-adminsdk-fbsvc@ttl-incentives.iam.gserviceaccount.com
+```
+
+If the deploy complains about permissions on that account, either grant your
+user *Service Account User* on it, or drop the `serviceAccount` line from
+`setGlobalOptions` in [`functions/index.js`](functions/index.js) and share the
+sheet with the default compute service account instead.
 
 ### What it reads, and what it refuses to read
 
@@ -415,8 +456,14 @@ src/
   hooks/useCompetition.ts The one hook every screen uses for its numbers
   components/             Layout, Avatar, Countdown, badges, charts/
   pages/                  Leaderboard, Charts, BrokerPage, Admin, Rules
+    importNow.ts          Calls the Cloud Function behind "Actualizar ahora"
+    privacy.test.ts       Fails the build if a client column reaches the importer
 data/members.json         The allowlist and the 25-broker roster
 scripts/seed-members.js   Loads that JSON into Firestore
+scripts/import-sheet.js   CLI for the importer (GitHub Actions runs this)
+functions/
+  import-core.js          THE importer — the only copy of the privacy filter
+  index.js                Admin-only callable behind the "Actualizar ahora" button
 firestore.rules           Server-side access control (deploy it yourself)
 ```
 
