@@ -241,9 +241,42 @@ npm run import:dry     # show what it would do, write nothing
 npm run import         # do it
 ```
 
-It also runs **automatically every day at 3:00 PM Guatemala** via
-[`.github/workflows/import.yml`](.github/workflows/import.yml), and can be
-triggered by hand from the repo's Actions tab.
+It also runs **automatically every 10 minutes** via
+[`.github/workflows/import.yml`](.github/workflows/import.yml), so the
+leaderboard is never more than about 15 minutes behind the form. The dashboard
+listens to Firestore live, so when an import lands every open screen updates
+itself — nobody has to refresh the page.
+
+Importing this often is safe and free:
+
+- The importer **writes nothing when nothing changed**. It reads the rows the
+  sheet has, compares them against Firestore, and exits if they match.
+- The **3:00 PM cut-off is a scoring rule**, not an import schedule. It is
+  `DAILY_CUTOFF_HOUR` in [`src/config/competition.ts`](src/config/competition.ts)
+  and is computed from each entry's own timestamp, so importing more often
+  never moves anyone's score.
+- The repo is public, so GitHub Actions minutes cost nothing.
+
+### Update the board by hand
+
+When a manager wants the board refreshed *right now* instead of waiting for the
+next 10-minute run:
+
+1. Open the repo's **Actions** tab.
+2. Pick **Import form responses** in the left sidebar.
+3. Click **Run workflow** (top right), leave the branch on `main`, and confirm.
+
+It finishes in about a minute, and the board updates on its own once it does.
+Runs are labelled **A mano** when a person started one and **Automatico** when
+the schedule did, so it is obvious in the list who triggered what.
+
+Tick **"Solo ver que haria"** before confirming to get a preview instead: the
+run reports what it *would* import and writes nothing. Useful for checking a
+suspicious row without touching the leaderboard.
+
+> Managers need a GitHub account with write access to `TTLGT/ttlincentives` for
+> the Run workflow button to appear. Add them under
+> **Settings > Collaborators and teams**.
 
 ### What it reads, and what it refuses to read
 

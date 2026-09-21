@@ -1,9 +1,23 @@
 name: Import form responses
 
+# Lo que los gerentes ven como titulo de cada corrida en la pestania Actions.
+run-name: >-
+  ${{ github.event_name == 'workflow_dispatch'
+  && (inputs.dry_run && 'A mano - solo prueba' || 'A mano')
+  || 'Automatico' }}
+
 # Trae las respuestas del Google Form al tablero.
 #
-# Corre solo todos los dias en el corte de las 3:00 PM de Guatemala, y tambien
-# se puede disparar a mano desde la pestania Actions (boton "Run workflow").
+# Corre solo CADA 10 MINUTOS para que los gerentes vean el tablero casi en vivo,
+# y tambien se puede disparar a mano desde la pestania Actions (boton
+# "Run workflow"). Ver el README, seccion "Actualizar el tablero a mano".
+#
+# Importar seguido es barato y seguro:
+#   - El script compara contra Firestore y NO escribe nada si nada cambio.
+#   - El corte de las 3:00 PM es una regla de PUNTAJE (DAILY_CUTOFF_HOUR en
+#     src/config/competition.ts), se calcula con la fecha de cada entrada.
+#     Importar mas seguido no mueve el puntaje de nadie.
+#   - El repositorio es publico, asi que los minutos de Actions son gratis.
 #
 # Antes de que esto sirva hay que cargar dos secrets en el repositorio:
 #   Settings > Secrets and variables > Actions > New repository secret
@@ -15,11 +29,19 @@ name: Import form responses
 
 on:
   schedule:
-    # 21:00 UTC = 15:00 en Guatemala (UTC-6 todo el anio, sin horario de verano).
-    - cron: '0 21 * * *'
+    # Cada 10 minutos. GitHub a veces atrasa los cron unos minutos cuando esta
+    # cargado, asi que en el peor caso el tablero va ~15 minutos atras.
+    - cron: '*/10 * * * *'
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Solo ver que haria, sin escribir en el tablero'
+        type: boolean
+        default: false
 
 # Una importacion a la vez: dos corriendo juntas podrian pisarse.
+# cancel-in-progress: false para no cortar una escritura por la mitad.
+# GitHub deja una sola corrida en espera, asi que no se hace cola.
 concurrency:
   group: import-sheet
   cancel-in-progress: false
@@ -51,7 +73,13 @@ jobs:
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
           SHEET_ID: ${{ secrets.SHEET_ID }}
-        run: npm run import
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          if [ "$DRY_RUN" = "true" ]; then
+            npm run import:dry
+          else
+            npm run import
+          fi
 
       - name: Borrar las credenciales
         if: always()
